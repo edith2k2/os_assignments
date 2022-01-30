@@ -14,10 +14,14 @@ void run(const char** args, int len, int in_fd, int out_fd)
   pid_t child_pid = fork();
   if (child_pid == 0)
   {
-    execvp(args[0], args);
+    dup2(in_fd, 0);
+    dup2(out_fd, 1);
+    // close(out_fd);
+    // closed();
+    execvp(args[0], (char**)args);
   }else
   {
-
+    wait(NULL);
   }
 
 }
@@ -57,6 +61,7 @@ int main(){
       c_args[commands[i].size()] = NULL;
       if (i == (int)commands.size() - 1)
       {
+        cout << "last command\n";
         run(c_args, (int)commands[i].size() + 1, in_fd, 1);
       }else
       {
@@ -69,6 +74,8 @@ int main(){
         }
         in_fd = FD[0];
       }
+      cout << "executed " << i << "\n";
     }
+    cout << "finish execution" << "\n";
   }
 }
