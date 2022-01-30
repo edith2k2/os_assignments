@@ -8,9 +8,9 @@ using namespace std;
 
 typedef vector<string> vs;
 typedef vector<vector<string>> vvs;
-void run(const char** args, int len, int in_fd, int out_fd)
+void run(const char** args, int len, int in_fd, int out_fd, int wait_id)
 {
-  cout << in_fd << " " << out_fd << "\n";
+  // cout << in_fd << " " << out_fd << "\n";
   pid_t child_pid = fork();
   if (child_pid == 0)
   {
@@ -19,11 +19,12 @@ void run(const char** args, int len, int in_fd, int out_fd)
     // close(out_fd);
     // closed();
     execvp(args[0], (char**)args);
-  }else
-  {
-    wait(NULL);
+  }else{
+    if (wait_id)
+    {
+      wait(NULL);
+    }
   }
-
 }
 int main(){
   while (true)
@@ -61,8 +62,8 @@ int main(){
       c_args[commands[i].size()] = NULL;
       if (i == (int)commands.size() - 1)
       {
-        cout << "last command\n";
-        run(c_args, (int)commands[i].size() + 1, in_fd, 1);
+        // cout << "last command\n";
+        run(c_args, (int)commands[i].size() + 1, in_fd, 1, 1);
       }else
       {
         if (pipe(FD) == -1){
@@ -70,12 +71,14 @@ int main(){
           exit(0);
         }else
         {
-          run(c_args, (int)commands[i].size() + 1, in_fd, FD[1]);
+          run(c_args, (int)commands[i].size() + 1, in_fd, FD[1], 0);
         }
         in_fd = FD[0];
       }
-      cout << "executed " << i << "\n";
+      // cout << "executed " << i << "\n";
     }
-    cout << "finish execution" << "\n";
+    // cout << "finish execution" << "\n";
+    fflush(stdin);
+    fflush(stdout);
   }
 }
