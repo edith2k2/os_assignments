@@ -8,6 +8,19 @@ using namespace std;
 
 typedef vector<string> vs;
 typedef vector<vector<string>> vvs;
+void run(const char** args, int len, int in_fd, int out_fd)
+{
+  cout << in_fd << " " << out_fd << "\n";
+  pid_t child_pid = fork();
+  if (child_pid == 0)
+  {
+    execvp(args[0], args);
+  }else
+  {
+
+  }
+
+}
 int main(){
   while (true)
   {
@@ -32,12 +45,8 @@ int main(){
       }
     }
     commands.push_back(temp);
-    int no_pipes = (int)commands.size() - 1;
-    int** pipes = new int*[no_pipes];
-    for (int i = 0; i < no_pipes; i++){
-      pipes[i] = new int[2];
-      pipe(pipes[i]);
-    }
+    int FD[2];
+    int in_fd = 0;
     for (int i = 0; i < (int)commands.size(); i++)
     {
       const char **c_args = new const char *[commands[i].size() + 1];
@@ -46,22 +55,19 @@ int main(){
         c_args[j] = commands[i][j].c_str();
       }
       c_args[commands[i].size()] = NULL;
-      if (fork() == 0){
-        if(i == 0){
-          close(1); // closing output
-          dup(pipes[i][1]); // dup write end at stdout's place
-        }else if (i == (int)commands.size() - 1){
-          close(0); // closing input
-          dup(pipes[i - 1][0]); // dup read end at stdin's place
-        }else{
-          close(0);
-          dup(pipes[i - 1][0]);
-          close(1);
-          dup(pipes[i][1]);
+      if (i == (int)commands.size() - 1)
+      {
+        run(c_args, (int)commands[i].size() + 1, in_fd, 1);
+      }else
+      {
+        if (pipe(FD) == -1){
+          cout << "Pipe error\n";
+          exit(0);
+        }else
+        {
+          run(c_args, (int)commands[i].size() + 1, in_fd, FD[1]);
         }
-        execvp(commands[i][0].c_str(), (char**)c_args);
-      }else{
-        wait(NULL);
+        in_fd = FD[0];
       }
     }
   }
