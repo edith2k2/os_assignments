@@ -59,6 +59,8 @@ void run(vs& args, string& input, string& output){
 }
 int main(){
   cout << "\n";
+  // opening or creating .history file
+  int his_fd = open(".history", O_CREAT | O_WRONLY | O_APPEND);
   while(true)
   {
     cout << ">> ";
@@ -79,5 +81,7 @@ int main(){
     }else{
       wait(NULL);
     }
+    // storing command in history
+    write(his_fd, );
   }
 }
