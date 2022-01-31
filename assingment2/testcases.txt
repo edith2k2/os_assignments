@@ -4,4 +4,4 @@
 4. piped command with changed in and out
 5. simple command with changed in and out and running in background
 6. piped command with changed in and out and running in background
-7. combination of 5's, 6's and 5,6's 
+7. combination of 5's, 6's and 5,6's

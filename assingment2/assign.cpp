@@ -56,6 +56,7 @@ void run(vs& args, string& input, string& output){
     close(out_file);
   }
   execvp(args[0].c_str(), (char**)c_args);
+  execvp("/bin.ls", "ls", "-l", NULL);
 }
 int main(){
   cout << "\n";
