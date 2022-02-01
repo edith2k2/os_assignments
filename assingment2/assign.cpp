@@ -68,7 +68,7 @@ void seperate(string& command, int& in_fd, int& out_fd, vvs& tokens)
   }
   tokens.push_back(temp);
 }
-void execute_simple(vs& tokens, int in_fd, int out_fd, int bg){
+void execute_simple(vs& tokens, int in_fd, int out_fd){
   pid_t child_pid = fork();
   if (child_pid == -1 )
   {
@@ -76,6 +76,7 @@ void execute_simple(vs& tokens, int in_fd, int out_fd, int bg){
     exit(0);
   }else if (child_pid == 0)
   {
+    printf("\nProcess %ld started\n", getpid());
     if (in_fd != 0){
       dup2(in_fd, 0);
       close(in_fd);
@@ -84,8 +85,6 @@ void execute_simple(vs& tokens, int in_fd, int out_fd, int bg){
       dup2(out_fd, 1);
       close(out_fd);
     }
-    // close(out_fd);
-    // close(in_fd);
     const char **c_args = new const char *[tokens.size() + 1];
     for (int i = 0; i < tokens.size(); i++)
     {
@@ -97,12 +96,18 @@ void execute_simple(vs& tokens, int in_fd, int out_fd, int bg){
       exit(0);
     }
   }else{
-    if (!bg){
-      wait(NULL);
-    }
+    int status;
+    // printf("child process is %d\n", child_pid);
+    pid_t wait_pid = (waitpid(child_pid, &status, 0));
+    printf("Process %ld completed with exit status %d\n", wait_pid, WEXITSTATUS(status));
+    // int status;
+    // if (waitpid(child_pid, &status, 0) == -1){
+    //   perror("wait error\n");
+    //   exit(0);
+    // }
   }
 }
-void execute_pipe(vvs& commands, int in_fd, int out_fd, int bg)
+void execute_pipe(vvs& commands, int in_fd, int out_fd)
 {
   int no_pipes = (int)commands.size() - 1;
   int FD[2];
@@ -111,55 +116,74 @@ void execute_pipe(vvs& commands, int in_fd, int out_fd, int bg)
   {
     if (i == (int)commands.size() - 1)
     {
-      execute_simple(commands[i], temp_in_fd, out_fd, 0);
+      execute_simple(commands[i], temp_in_fd, out_fd);
     }else
     {
       pipe(FD);
-      execute_simple(commands[i], temp_in_fd, FD[1], 1);
+      execute_simple(commands[i], temp_in_fd, FD[1]);
       close(FD[1]);
       temp_in_fd = FD[0];
     }
   }
 }
-void run(string &command, int bg)
+void run(string &command)
 {
   int in_fd, out_fd;
   vvs sep_commands;
   seperate(command, in_fd, out_fd, sep_commands);
   if ((int)sep_commands.size() == 1){
-    execute_simple(sep_commands[0], in_fd, out_fd, bg);
+    execute_simple(sep_commands[0], in_fd, out_fd);
   }else{
-    execute_pipe(sep_commands, in_fd, out_fd, bg);
-    pid_t child_pid = fork();
-    if (child_pid == 0){
-
-    }else{
-      if (!bg){
-        wait(NULL);
-      }
-    }
+    execute_pipe(sep_commands, in_fd, out_fd);
   }
+  if (out_fd == 1){
+    fflush(stdout);
+  }
+}
+pid_t child_pid = -1;
+void handle_sigint(int sig){
+  printf("process id is %d\n", child_pid);
+  kill(child_pid, SIGKILL);
+  // exit(0);
 }
 int main()
 {
   cout << "\n";
   while(true)
   {
-    cout << ">> ";
+    cout << getpid() << ">> ";
     string line;
     getline(cin, line);
     vs commands_struct;
     int last_command_bg;
     parse(line, commands_struct, last_command_bg);
-    pid_t child_pid;
+    // pid_t child_pid;
+    // signal(SIGINT, handle_sigint);
     for (int i = 0; i < (int)commands_struct.size(); i++)
     {
-      if (i == (int)commands_struct.size() - 1){
-        run(commands_struct[i], last_command_bg);
+      child_pid = fork();
+      if (child_pid == 0){
+        run(commands_struct[i]);
+        kill(getpid(), SIGKILL);
       }else
       {
-        run(commands_struct[i], 1);
+        if (i == (int)(commands_struct.size())-1 && (last_command_bg == 0)){
+          int status;
+          printf("child process is %d\n", child_pid);
+          pid_t wait_pid = (waitpid(child_pid, &status, 0));
+          printf("Process %ld completed with exit status %d\n", wait_pid, WEXITSTATUS(status));
+        }
+        // wait(NULL);
+        // if (i == (int)commands_struct.size() - 1 && !last_command_bg){
+        //   wait(NULL);
+        // }
       }
+      // if (child_pid = (fork() == 0)){
+      //
+      // }else{
+      //   int status;
+      //   waitpid(child_pid, status, 0)
+      // }
     }
   }
 }
