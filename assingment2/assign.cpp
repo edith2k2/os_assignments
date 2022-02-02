@@ -69,42 +69,23 @@ void seperate(string& command, int& in_fd, int& out_fd, vvs& tokens)
   tokens.push_back(temp);
 }
 void execute_simple(vs& tokens, int in_fd, int out_fd){
-  pid_t child_pid = fork();
-  if (child_pid == -1 )
+  if (in_fd != 0){
+    dup2(in_fd, 0);
+    close(in_fd);
+  }
+  if (out_fd != 1){
+    dup2(out_fd, 1);
+    close(out_fd);
+  }
+  const char **c_args = new const char *[tokens.size() + 1];
+  for (int i = 0; i < tokens.size(); i++)
   {
-    cout << "error in fork\n";
+    c_args[i] = tokens[i].c_str();
+  }
+  c_args[tokens.size()] = NULL;
+  if (execvp(c_args[0], (char**)c_args) < 0){
+    printf("Wrong command\n");
     exit(0);
-  }else if (child_pid == 0)
-  {
-    printf("\nProcess %ld started\n", getpid());
-    if (in_fd != 0){
-      dup2(in_fd, 0);
-      close(in_fd);
-    }
-    if (out_fd != 1){
-      dup2(out_fd, 1);
-      close(out_fd);
-    }
-    const char **c_args = new const char *[tokens.size() + 1];
-    for (int i = 0; i < tokens.size(); i++)
-    {
-      c_args[i] = tokens[i].c_str();
-    }
-    c_args[tokens.size()] = NULL;
-    if (execvp(c_args[0], (char**)c_args) < 0){
-      printf("Wrong command\n");
-      exit(0);
-    }
-  }else{
-    int status;
-    // printf("child process is %d\n", child_pid);
-    pid_t wait_pid = (waitpid(child_pid, &status, 0));
-    printf("Process %ld completed with exit status %d\n", wait_pid, WEXITSTATUS(status));
-    // int status;
-    // if (waitpid(child_pid, &status, 0) == -1){
-    //   perror("wait error\n");
-    //   exit(0);
-    // }
   }
 }
 void execute_pipe(vvs& commands, int in_fd, int out_fd)
@@ -112,20 +93,84 @@ void execute_pipe(vvs& commands, int in_fd, int out_fd)
   int no_pipes = (int)commands.size() - 1;
   int FD[2];
   int temp_in_fd = in_fd;
+  pid_t pipe_child_pid;
   for (int i = 0; i < (int)commands.size(); i++)
   {
-    if (i == (int)commands.size() - 1)
+    pipe(FD);
+    pipe_child_pid = fork();
+    if (pipe_child_pid == 0)
     {
-      execute_simple(commands[i], temp_in_fd, out_fd);
-    }else
-    {
-      pipe(FD);
-      execute_simple(commands[i], temp_in_fd, FD[1]);
+      int act_out_fd = FD[1];
+      if (i == (int)commands.size() - 1)
+      {
+        act_out_fd = out_fd;
+      }
+      execute_simple(commands[i], temp_in_fd, act_out_fd);
+    }else{
+      wait(NULL);
       close(FD[1]);
       temp_in_fd = FD[0];
     }
   }
 }
+// void execute_simple(vs& tokens, int in_fd, int out_fd){
+//   pid_t child_pid = fork();
+//   if (child_pid == -1 )
+//   {
+//     cout << "error in fork\n";
+//     exit(0);
+//   }else if (child_pid == 0)
+//   {
+//     printf("\nProcess %ld started\n", getpid());
+//     if (in_fd != 0){
+//       dup2(in_fd, 0);
+//       close(in_fd);
+//     }
+//     if (out_fd != 1){
+//       dup2(out_fd, 1);
+//       close(out_fd);
+//     }
+//     const char **c_args = new const char *[tokens.size() + 1];
+//     for (int i = 0; i < tokens.size(); i++)
+//     {
+//       c_args[i] = tokens[i].c_str();
+//     }
+//     c_args[tokens.size()] = NULL;
+//     if (execvp(c_args[0], (char**)c_args) < 0){
+//       printf("Wrong command\n");
+//       exit(0);
+//     }
+//   }else{
+//     int status;
+//     // printf("child process is %d\n", child_pid);
+//     pid_t wait_pid = (waitpid(child_pid, &status, 0));
+//     printf("Process %ld completed with exit status %d\n", wait_pid, WEXITSTATUS(status));
+//     // int status;
+//     // if (waitpid(child_pid, &status, 0) == -1){
+//     //   perror("wait error\n");
+//     //   exit(0);
+//     // }
+//   }
+// }
+// void execute_pipe(vvs& commands, int in_fd, int out_fd)
+// {
+//   int no_pipes = (int)commands.size() - 1;
+//   int FD[2];
+//   int temp_in_fd = in_fd;
+//   for (int i = 0; i < (int)commands.size(); i++)
+//   {
+//     if (i == (int)commands.size() - 1)
+//     {
+//       execute_simple(commands[i], temp_in_fd, out_fd);
+//     }else
+//     {
+//       pipe(FD);
+//       execute_simple(commands[i], temp_in_fd, FD[1]);
+//       close(FD[1]);
+//       temp_in_fd = FD[0];
+//     }
+//   }
+// }
 void run(string &command)
 {
   int in_fd, out_fd;
@@ -158,7 +203,7 @@ int main()
     int last_command_bg;
     parse(line, commands_struct, last_command_bg);
     // pid_t child_pid;
-    // signal(SIGINT, handle_sigint);
+    signal(SIGINT, handle_sigint);
     for (int i = 0; i < (int)commands_struct.size(); i++)
     {
       child_pid = fork();
