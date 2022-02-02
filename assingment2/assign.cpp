@@ -156,7 +156,16 @@ void handle_sigint(int sig){
   }else{
     // printf("Error\n About to kill %d\n", child_pid);
   }
-  // exit(0);
+}
+bool bg_sig = false;
+void handle_sigtstp(int sig)
+{
+  int new_child_pid = fork();
+  if (new_child_pid == 0)
+  {
+  }else{
+    bg_sig = true;
+  }
 }
 bool command_is_cd(string& command)
 {
@@ -195,7 +204,8 @@ int main()
     {
       bool is_cd = command_is_cd(commands_struct[i]);
       child_pid = fork();
-      if (child_pid == 0){
+      if (child_pid == 0)
+      {
         if (!is_cd)
         {
           run(commands_struct[i]);
@@ -203,11 +213,13 @@ int main()
         kill(getpid() ,SIGKILL);
       }else
       {
+        // signal(SIGTSTP, handle_sigtstp);
+
         if (is_cd)
         {
           run(commands_struct[i]);
         }
-        if (i == (int)(commands_struct.size())-1 && (last_command_bg == 0)){
+        if (i == (int)(commands_struct.size())-1 && (last_command_bg == 0) && !bg_sig){
           int status;
           printf("\nchild process is %d\n", child_pid);
           pid_t wait_pid = (waitpid(child_pid, &status, 0));
