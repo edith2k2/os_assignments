@@ -6,6 +6,8 @@
 #include <unistd.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <dirent.h>
+#include <termios.h>
 
 using namespace std;
 typedef vector<string> vs;
@@ -180,6 +182,113 @@ bool command_is_cd(string& command)
   }
   return false;
 }
+void get_file_list(vs& files)
+{
+  DIR *d;
+  struct dirent* dir;
+  d = opendir(".");
+  if (d)
+  {
+    while((dir = readdir(d)) != NULL)
+    {
+      string temp(dir -> d_name);
+      files.push_back(dir->d_name);
+    }
+    closedir(d);
+  }
+}
+void divide(string &input, string& rest_string, string& last_key)
+{
+  int pos = input.find_last_of(' ');
+  rest_string = input.substr(0, pos + 1);
+  last_key = input.substr(pos+1);
+  last_key.pop_back();
+}
+string autocomplete(string input)
+{
+  string key;
+  string rest_string;
+  divide(input ,rest_string ,key);
+  vs files;
+  get_file_list(files);
+  int len = key.size();
+  vs results;
+  for (int i = 0; i < files.size(); i++)
+  {
+    if (key == files[i].substr(0, len))
+    {
+      results.push_back(files[i]);
+    }
+  }
+  if(results.size() == 0)
+  {
+    printf("No file matches\n");
+    return "";
+  }else
+  {
+    cout << "\n";
+    for (int i = 0;i < (int)results.size(); i++)
+    {
+      cout << i + 1 << ". "<< results[i] << '\n';
+    }
+    printf("\nChoose[or -1 for exit]: ");
+    int option;
+    cin >> option;
+    // cout << results[option - 1];
+    if (option == -1)
+    {
+      // printf("Hello");
+      return "";
+    }
+    cout << rest_string << results[option -1];
+    string ret = rest_string + results[option - 1];
+    return ret;
+  }
+}
+char getch()
+{
+  struct termios old_settings, new_settings;
+  tcgetattr(STDIN_FILENO, &old_settings);
+  new_settings = old_settings;
+  new_settings.c_lflag = new_settings.c_lflag & ~(ICANON | ECHO);
+  tcsetattr(STDIN_FILENO, TCSANOW, &new_settings);
+  char ch;
+  ch = getchar();
+  tcsetattr(STDIN_FILENO, TCSANOW, &old_settings);
+  return ch;
+}
+void readinput(string& s)
+{
+  while(1)
+  {
+    int ch = getch();
+    if (ch == 127 || ch == 8)
+    {
+      s.pop_back();
+      printf("\b ");
+      printf("\033[1D");
+    }else if (ch == '\n')
+    {
+      printf("\n");
+      break;
+    }else if (ch == '\t')
+    {
+      s = s + (char)ch;
+      break;
+    }else if (ch == 0x0107)
+    {
+      printf("\033[1D");
+    }else if (ch == 0x0108)
+    {
+      printf("\033[1C");
+    }
+    else
+    {
+      putchar(ch);
+      s = s + (char)ch;
+    }
+  }
+}
 int main()
 {
   cout << "\n";
@@ -187,9 +296,19 @@ int main()
   {
     signal(SIGINT, handle_sigint);
     cout << getpid() << ">> ";
+    fflush(stdout);
     // signal(SIGINT, handle_sigint);
     string line;
-    getline(cin, line);
+    // getline(cin, line);
+    readinput(line);
+    // cout << line;
+    if (line.back() == '\t')
+    {
+      line = autocomplete(line);
+      if (line == "")continue;
+      cout << line << '\n';
+    }
+    if (line == "")continue;
     vs commands_struct;
     int last_command_bg;
     parse(line, commands_struct, last_command_bg);
