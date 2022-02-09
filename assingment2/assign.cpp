@@ -2,7 +2,9 @@
 #include <tuple>
 #include <sstream>
 #include <iostream>
+#include <fstream>
 #include <vector>
+#include <list>
 #include <unistd.h>
 #include <signal.h>
 #include <fcntl.h>
@@ -17,22 +19,28 @@
 #include <sys/ioctl.h>
 
 using namespace std;
+
+#define HIST_MAX_SIZE 10000
+#define HIST_MAX_PRINT 1000
+#define KEY_LEFT    0x0107
+#define KEY_RIGHT   0x0108
+
 typedef vector<string> vs;
 typedef vector<vs> vvs;
 typedef tuple<vs, string, string> tvsss;
 
 typedef tuple<vs, int, int, int> ciop; // commands, input, output, piped
 
-#define KEY_LEFT    0x0107
-#define KEY_RIGHT   0x0108
+list<string> hisv;
+
 void parse(string &line, vs& commands_struct, int& last_command_bg)
 {
   stringstream ss(line);
   string word;
-  string temp="";
+  string temp = "";
   vs commands;
   last_command_bg = 1;
-  while(ss >> word)
+  while (ss >> word)
   {
     // cout << word;
     if (word == "multiWatch")
@@ -46,16 +54,16 @@ void parse(string &line, vs& commands_struct, int& last_command_bg)
         if (line[i] == '"' && start == 0)
         {
           start = 1;
-        }else if (line[i] == '"' && start == 1)
+        } else if (line[i] == '"' && start == 1)
         {
           if (temp != "")
           {
             stringstream ss(temp);
             commands_struct.push_back(temp);
           }
-          temp ="";
+          temp = "";
           start = 0;
-        }else if (start == 1)
+        } else if (start == 1)
         {
           temp = temp + line[i];
         }
@@ -67,12 +75,12 @@ void parse(string &line, vs& commands_struct, int& last_command_bg)
     {
       commands_struct.push_back(temp);
       temp = "";
-    }else
+    } else
     {
       temp = temp + " " + word;
     }
   }
-  if (temp != ""){
+  if (temp != "") {
     last_command_bg = 0;
     commands_struct.push_back(temp);
   }
@@ -84,9 +92,9 @@ void seperate(string& command, int& in_fd, int& out_fd, vvs& tokens)
   vs temp;
   in_fd = 0;
   out_fd = 1;
-  while(ss >> word)
+  while (ss >> word)
   {
-    if (word == ">"){
+    if (word == ">") {
       ss >> word;
       string output = word;
       out_fd = open(output.c_str(), O_WRONLY | O_CREAT | O_TRUNC);
@@ -101,7 +109,7 @@ void seperate(string& command, int& in_fd, int& out_fd, vvs& tokens)
     {
       tokens.push_back(temp);
       temp.clear();
-    }else
+    } else
     {
       temp.push_back(word);
     }
@@ -116,18 +124,18 @@ void execute_simple(vs& tokens, int in_fd, int out_fd)
     if (tokens.size() == 1 || tokens[1] == "~")
     {
       chdir(getenv("HOME"));
-      printf("changed directory to %s",getcwd(dir, 100));
+      printf("changed directory to %s", getcwd(dir, 100));
       return;
     }
     chdir(tokens[1].c_str());
-    printf("changed directory to %s",getcwd(dir, 100));
+    printf("changed directory to %s", getcwd(dir, 100));
     return;
   }
-  if (in_fd != 0){
+  if (in_fd != 0) {
     dup2(in_fd, 0);
     close(in_fd);
   }
-  if (out_fd != 1){
+  if (out_fd != 1) {
     dup2(out_fd, 1);
     close(out_fd);
   }
@@ -137,7 +145,7 @@ void execute_simple(vs& tokens, int in_fd, int out_fd)
     c_args[i] = tokens[i].c_str();
   }
   c_args[tokens.size()] = NULL;
-  if (execvp(c_args[0], (char**)c_args) < 0){
+  if (execvp(c_args[0], (char**)c_args) < 0) {
     printf("Wrong command\n");
     exit(0);
   }
@@ -151,7 +159,7 @@ void execute_pipe(vvs& commands, int in_fd, int out_fd)
   for (int i = 0; i < (int)commands.size(); i++)
   {
     pipe(FD);
-    bool is_cd = (commands[i][0] == "cd")? true : false;
+    bool is_cd = (commands[i][0] == "cd") ? true : false;
     pipe_child_pid = fork();
     int act_out_fd = FD[1];
     if (i == (int)commands.size() - 1)
@@ -161,7 +169,7 @@ void execute_pipe(vvs& commands, int in_fd, int out_fd)
     if (pipe_child_pid == 0)
     {
       if (!is_cd)execute_simple(commands[i], temp_in_fd, act_out_fd);
-    }else
+    } else
     {
       if (is_cd)execute_simple(commands[i], temp_in_fd, act_out_fd);
       wait(NULL);
@@ -175,12 +183,12 @@ void run(string &command)
   int in_fd, out_fd;
   vvs sep_commands;
   seperate(command, in_fd, out_fd, sep_commands);
-  if ((int)sep_commands.size() == 1){
+  if ((int)sep_commands.size() == 1) {
     execute_simple(sep_commands[0], in_fd, out_fd);
-  }else{
+  } else {
     execute_pipe(sep_commands, in_fd, out_fd);
   }
-  if (out_fd == 1){
+  if (out_fd == 1) {
     fflush(stdout);
   }
 }
@@ -200,7 +208,7 @@ void handle_sigint(int sig)
 void handle_sigint_nt(int sig)
 {
   cout << '\n';
-  cout << getpid() << ">> ";
+  cout << ">> ";
   fflush(stdout);
 }
 void handle_sigtstp_nt(int sig)
@@ -217,7 +225,7 @@ void handle_sigtstp(int sig)
   int new_child_pid = fork();
   if (new_child_pid == 0)
   {
-  }else{
+  } else {
     kill(getpid(), SIGKILL);
   }
   // kill(getpid(), SIGSTOP);
@@ -237,7 +245,7 @@ bool command_is_cd(string& command)
 {
   stringstream ss(command);
   string word;
-  while(ss >> word)
+  while (ss >> word)
   {
     if (word == "cd")
     {
@@ -250,7 +258,7 @@ bool command_is_multi(string& command)
 {
   stringstream ss(command);
   string word;
-  while(ss >> word)
+  while (ss >> word)
   {
     if (word == "multiWatch")
     {
@@ -266,7 +274,7 @@ void get_file_list(vs& files)
   d = opendir(".");
   if (d)
   {
-    while((dir = readdir(d)) != NULL)
+    while ((dir = readdir(d)) != NULL)
     {
       string temp(dir -> d_name);
       files.push_back(dir->d_name);
@@ -278,14 +286,14 @@ void divide(string &input, string& rest_string, string& last_key)
 {
   int pos = input.find_last_of(' ');
   rest_string = input.substr(0, pos + 1);
-  last_key = input.substr(pos+1);
+  last_key = input.substr(pos + 1);
   last_key.pop_back();
 }
 string autocomplete(string input)
 {
   string key;
   string rest_string;
-  divide(input ,rest_string ,key);
+  divide(input , rest_string , key);
   vs files;
   get_file_list(files);
   int len = key.size();
@@ -297,16 +305,16 @@ string autocomplete(string input)
       results.push_back(files[i]);
     }
   }
-  if(results.size() == 0)
+  if (results.size() == 0)
   {
     printf("No file matches\n");
     return "";
-  }else
+  } else
   {
     cout << "\n";
-    for (int i = 0;i < (int)results.size(); i++)
+    for (int i = 0; i < (int)results.size(); i++)
     {
-      cout << i + 1 << ". "<< results[i] << '\n';
+      cout << i + 1 << ". " << results[i] << '\n';
     }
     printf("\nChoose[or -1 for exit]: ");
     int option;
@@ -317,7 +325,7 @@ string autocomplete(string input)
       // printf("Hello");
       return "";
     }
-    cout << rest_string << results[option -1];
+    cout << rest_string << results[option - 1]<<"\n";
     string ret = rest_string + results[option - 1];
     return ret;
   }
@@ -337,15 +345,15 @@ char getch()
 void readinput(string& s)
 {
   int cursor = 0;
-  while(1)
+  while (1)
   {
     int ch = getch();
     if (ch == 127 || ch == 8)
     {
       if (cursor == s.size())
       {
-        if(s.size())s.pop_back();
-      }else
+        if (s.size())s.pop_back();
+      } else
       {
         s.erase(cursor - 1, 1);
       }
@@ -354,11 +362,11 @@ void readinput(string& s)
       cursor = (cursor - 1 > 0) ? cursor - 1 : 0;
       printf("\b ");
       printf("\033[1D");
-    }else if (ch == '\n')
+    } else if (ch == '\n')
     {
       printf("\n");
       break;
-    }else if (ch == '\t')
+    } else if (ch == '\t' || ch==18)
     {
       s = s + (char)ch;
       break;
@@ -395,7 +403,7 @@ void readinput(string& s)
         putchar(ch);
         s = s + (char)ch;
         cursor++;
-      }else
+      } else
       {
         s.insert(cursor, to_string(ch));
         cursor++;
@@ -423,41 +431,39 @@ void run_multiWatch(vs& commands)
   vvs tokens;
   cout << "multiWatch\n";
   seperate(commands, tokens);
-  for (int i = 0; i < tokens.size(); i++)
+  // while(1)
+  // {
+  vector<int> fds(tokens.size());
+  vs temp_file_names;
+  for (int i = 0; i < (int)tokens.size(); i++)
   {
-    for (int j = 0; j < tokens[i].size(); j++)
+    pid_t child_pid = fork();
+    if (child_pid == 0)
     {
-      cout << tokens[i][j] << ' ';
+      string temp = ".temp." + to_string(getpid()) +  ".txt";
+      fds[i] = open(temp.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0777);
+      dup2(fds[i], 1);
+      const char **c_args = new const char *[tokens[i].size() + 1];
+      for (int j = 0; j < tokens[i].size(); j++)
+      {
+        c_args[j] = tokens[i][j].c_str();
+      }
+      close(fds[i]);
+      execvp(c_args[0], (char**)c_args);
+    }else
+    {
+      string temp = ".temp." + to_string(child_pid) +  ".txt";
+      temp_file_names.push_back(temp);
     }
-    cout << '\n';
   }
+  struct pollfd *pfds = new struct pollfd [tokens.size()];
+  time_t rawtime;
+  struct tm * timeinfo;
+  // if (cont)
+  // {continue;}
   while(1)
   {
-    vector<int> fds(tokens.size());
-    vs temp_file_names;
-    for (int i = 0; i < (int)tokens.size(); i++)
-    {
-      pid_t child_pid = fork();
-      if (child_pid == 0)
-      {
-        string temp = ".temp." + to_string(getpid()) +  ".txt";
-        fds[i] = open(temp.c_str(), O_RDWR | O_CREAT | O_TRUNC , S_IRWXG);
-        dup2(fds[i], 1);
-        const char **c_args = new const char *[tokens[i].size() + 1];
-        for (int j = 0; j < tokens[i].size(); j++)
-        {
-          c_args[j] = tokens[i][j].c_str();
-        }
-        execvp(c_args[0], (char**)c_args);
-      }else
-      {
-        string temp = ".temp." + to_string(child_pid) +  ".txt";
-        temp_file_names.push_back(temp);
-      }
-    }
-    struct pollfd *pfds = new struct pollfd [tokens.size()];
-    time_t rawtime;
-    struct tm * timeinfo;
+    bool cont = false;
     for (int i = 0; i < tokens.size(); i++)
     {
       fds[i] = open(temp_file_names[i].c_str(), O_RDONLY);
@@ -466,7 +472,7 @@ void run_multiWatch(vs& commands)
       pfds[i].events = POLLIN;
     }
     cout << "started polling\n";
-    poll(pfds, (int)tokens.size(), -1);
+    poll(pfds, (int)tokens.size(), 0);
     cout << "finished polling\n";
     char buf[1024];
     int fd;
@@ -476,6 +482,7 @@ void run_multiWatch(vs& commands)
     {
       if (pfds[i].revents & POLLIN)
       {
+        cout << fds[i] << '\n';
         if (fds[i] > 0)
         {
           time(&rawtime);
@@ -499,23 +506,106 @@ void run_multiWatch(vs& commands)
         }
       }
     }
-    // sleep(10);
+    sleep(5);
   }
-
-  // while(1)
-  // {
-  //
-  // }
-  cout << "killed multiWatch\n";
+  cout<<"killed multiWatch";
 }
+
+string trim_string(string s){
+  string ans="";
+  for(int i=0;i<s.length();i++){
+    if(s[i]==' ' || s[i]=='\t' || s[i]=='\n') continue;
+    ans=ans+s[i];
+  }
+  s=ans;
+  ans="";
+  for(int i=s.length()-1;i>=0;i--){
+    if(s[i]==' ' || s[i]=='\t' || s[i]=='\n') continue;
+    ans=s[i]+ans;
+  }
+  return ans;
+}
+
+string lcs(string s1, string s2)
+{   
+  int m = s1.length(),n = s2.length();
+  int DP[m + 1][n + 1];
+  int r, c, resLen=0;
+  for (int i = 0; i <= m; i++) {
+    for (int j = 0; j <= n; j++) {
+      if (i == 0 || j == 0) DP[i][j] = 0;
+      else if (s1[i - 1] == s2[j - 1]) {
+        DP[i][j] = DP[i - 1][j - 1] + 1;
+        if (resLen < DP[i][j]) {
+          resLen = DP[i][j];
+          r = i;
+          c = j;
+        }
+      }
+      else DP[i][j] = 0;
+    }
+  }
+  
+  string res = "";
+  if(resLen){
+    while (DP[r][c]) {
+      res = res+s1[r - 1];
+      r--;
+      c--;
+    }
+  }
+  return res;
+}
+
+
+void rev_search(){
+  cout<<"\nEnter search term: ";
+  string s;
+  cin>>s;
+  int max = 0;
+  vector<string> res;
+  for(auto it=hisv.rbegin();it!=hisv.rend();it++){  
+    string x = *it;
+    string match = lcs(x, s);
+    if(x==s){
+      cout<<"\t"<<s<<endl;
+      return;
+    }
+    if(match.length() > max){
+        res.clear();
+        res.push_back(x);
+        max = match.length();
+    }
+    else if (match.length() == max){
+       res.push_back(x);
+    }
+  }
+  if(max <=2){
+    cout<<"No match for search term in history"<<endl;
+    return;
+  }
+  for(string ans: res){
+    cout<<"\t"<<ans<<"\n";
+  }
+}
+
+
 int main()
 {
-  cout << "\n";
-  while(true)
+  ifstream hisi;
+  hisi.open("./history.txt");
+  string hs;
+  while (getline(hisi,hs)) {
+    if(hs.size()) hisv.push_back(hs);
+  }
+  hisi.close();
+  ofstream his;
+  his.open("./history.txt", ios::app);
+  while (true)
   {
     // signal(SIGINT, handle_sigint);
     // signal(SIGTSTP, handle_sigtstp_nt);
-    cout << getpid() << ">> ";
+    cout << ">> ";
     // signal(SIGINT, handle_sigint_nt);
     fflush(stdout);
     // signal(SIGTSTP, handle_sigtstp);
@@ -524,11 +614,41 @@ int main()
     readinput(line);
     // signal(SIGINT, SIG_DFL);
     // cout << line;
+    if(line.back()==(char)18){
+      rev_search();
+      continue;
+    }
+
+    if (line == "history") {
+      int p=hisv.size();
+      for (auto it=hisv.rbegin();it!=hisv.rend();it++) {
+        if(hisv.size()-p==HIST_MAX_PRINT) break;
+        cout << "\t" << p << " " << *it << "\n";
+        p--;
+      }
+      if ((hisv.size() && hisv.back() != line) || hisv.size() == 0) {
+        hisv.push_back(line);
+        if (hisv.size() > HIST_MAX_SIZE) hisv.pop_front();
+        his << line << endl;
+      }
+      continue;
+    }
+
+    if ((hisv.size() && hisv.back() != line) || hisv.size() == 0) {
+      string l1=trim_string(line);
+      if(l1.size()) 
+      {
+        hisv.push_back(line);
+        if (hisv.size() > HIST_MAX_SIZE) hisv.pop_front();
+        his << line << endl;
+      }
+    }
+
     if (line.back() == '\t')
     {
       line = autocomplete(line);
       if (line == "")continue;
-      cout << line << '\n';
+      // cout << line << '\n';
     }
     if (line == "")continue;
     vs commands_struct;
@@ -537,6 +657,15 @@ int main()
     // pid_t child_pid;
     if (commands_struct.size() == 1 && commands_struct[0] == " exit()")
     {
+      his.close();
+      if(hisv.size()==HIST_MAX_SIZE){
+        ofstream his;
+        his.open("./history.txt");
+        for(string s: hisv){
+          his<<s<<endl;
+        }
+        his.close();
+      }
       printf("\nBye!\n");
       break;
     }
@@ -547,7 +676,7 @@ int main()
       {
         signal(SIGINT, handle_sigint);
         run_multiWatch(commands_struct);
-      }else
+      } else
       {
         signal(SIGINT, handle_sigint_nt);
         waitpid(child_pid, NULL, 0);
@@ -564,13 +693,13 @@ int main()
       {
         signal(SIGTSTP, handle_sigtstp);
         signal(SIGINT, handle_sigint);
-        printf("\nchild process is %d\n", getpid());
+        // printf("\nchild process is %d\n", getpid());
         if (!is_cd)
         {
           run(commands_struct[i]);
         }
-        kill(getpid() ,SIGKILL);
-      }else
+        kill(getpid() , SIGKILL);
+      } else
       {
         signal(SIGINT, handle_sigint_nt);
         signal(SIGTSTP, handle_sigtstp_nt);
@@ -578,7 +707,7 @@ int main()
         {
           run(commands_struct[i]);
         }
-        if (i == (int)(commands_struct.size())-1 && (last_command_bg == 0) && !bg_sig){
+        if (i == (int)(commands_struct.size()) - 1 && (last_command_bg == 0) && !bg_sig) {
           int status;
           pid_t wait_pid = (waitpid(child_pid, &status, 0));
           // printf("HELLO parent\n");
