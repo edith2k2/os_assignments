@@ -431,78 +431,79 @@ void run_multiWatch(vs& commands)
   vvs tokens;
   cout << "multiWatch\n";
   seperate(commands, tokens);
-  // while(1)
-  // {
-  vector<int> fds(tokens.size());
-  vs temp_file_names;
-  for (int i = 0; i < (int)tokens.size(); i++)
-  {
-    pid_t child_pid = fork();
-    if (child_pid == 0)
-    {
-      string temp = ".temp." + to_string(getpid()) +  ".txt";
-      fds[i] = open(temp.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0777);
-      dup2(fds[i], 1);
-      const char **c_args = new const char *[tokens[i].size() + 1];
-      for (int j = 0; j < tokens[i].size(); j++)
-      {
-        c_args[j] = tokens[i][j].c_str();
-      }
-      close(fds[i]);
-      execvp(c_args[0], (char**)c_args);
-    }else
-    {
-      string temp = ".temp." + to_string(child_pid) +  ".txt";
-      temp_file_names.push_back(temp);
-    }
-  }
-  struct pollfd *pfds = new struct pollfd [tokens.size()];
-  time_t rawtime;
-  struct tm * timeinfo;
-  // if (cont)
-  // {continue;}
   while(1)
   {
-    bool cont = false;
-    for (int i = 0; i < tokens.size(); i++)
-    {
-      fds[i] = open(temp_file_names[i].c_str(), O_RDONLY);
-      cout << fds[i] << '\n';
-      pfds[i].fd = fds[i];
-      pfds[i].events = POLLIN;
-    }
-    cout << "started polling\n";
-    poll(pfds, (int)tokens.size(), 0);
-    cout << "finished polling\n";
-    char buf[1024];
-    int fd;
-    struct winsize w;
-    int width;
+    vector<int> fds(tokens.size());
+    vs temp_file_names;
     for (int i = 0; i < (int)tokens.size(); i++)
     {
-      if (pfds[i].revents & POLLIN)
+      pid_t child_pid = fork();
+      if (child_pid == 0)
       {
-        cout << fds[i] << '\n';
-        if (fds[i] > 0)
+        string temp = ".temp." + to_string(getpid()) +  ".txt";
+        fds[i] = open(temp.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0777);
+        dup2(fds[i], 1);
+        const char **c_args = new const char *[tokens[i].size() + 1];
+        for (int j = 0; j < tokens[i].size(); j++)
         {
-          time(&rawtime);
-          timeinfo = localtime(&rawtime);
-          printf("\n\"%s\", %02d:%02d:%02d\n", commands[i + 1].c_str(), timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-          fflush(stdout);
-          ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-          // printf ("lines %d\n", w.ws_row);
-          // printf ("columns %d\n", w.ws_col);
-          width = w.ws_col;
-          for (int fill = 0; fill < width / 2; fill++) printf("<-");
-          fflush(stdout);
-          while((fd = read(fds[i], buf, 1024)) > 0)
+          c_args[j] = tokens[i][j].c_str();
+        }
+        close(fds[i]);
+        execvp(c_args[0], (char**)c_args);
+      }else
+      {
+        string temp = ".temp." + to_string(child_pid) +  ".txt";
+        temp_file_names.push_back(temp);
+      }
+    }
+    struct pollfd *pfds = new struct pollfd [tokens.size()];
+    time_t rawtime;
+    struct tm * timeinfo;
+    // if (cont)
+    // {continue;}
+    // while(1)
+    // {
+      bool cont = false;
+      for (int i = 0; i < tokens.size(); i++)
+      {
+        fds[i] = open(temp_file_names[i].c_str(), O_RDONLY);
+        cout << fds[i] << '\n';
+        pfds[i].fd = fds[i];
+        pfds[i].events = POLLIN;
+      }
+      cout << "started polling\n";
+      poll(pfds, (int)tokens.size(), 0);
+      cout << "finished polling\n";
+      char buf[1024];
+      int fd;
+      struct winsize w;
+      int width;
+      for (int i = 0; i < (int)tokens.size(); i++)
+      {
+        if (pfds[i].revents & POLLIN)
+        {
+          // cout << fds[i] << '\n';
+          if (fds[i] > 0)
           {
-            write(1, buf, fd);
+            time(&rawtime);
+            timeinfo = localtime(&rawtime);
+            printf("\n\"%s\", %02d:%02d:%02d\n", commands[i + 1].c_str(), timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+            fflush(stdout);
+            ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+            // printf ("lines %d\n", w.ws_row);
+            // printf ("columns %d\n", w.ws_col);
+            width = w.ws_col;
+            for (int fill = 0; fill < width / 2; fill++) printf("<-");
+            fflush(stdout);
+            while((fd = read(fds[i], buf, 1024)) > 0)
+            {
+              write(1, buf, fd);
+            }
+            for (int fill = 0; fill < width / 2; fill++) printf("->");
+            fflush(stdout);
+            printf("\n");
+            close(fds[i]);
           }
-          for (int fill = 0; fill < width / 2; fill++) printf("->");
-          fflush(stdout);
-          printf("\n");
-          close(fds[i]);
         }
       }
     }
@@ -527,7 +528,7 @@ string trim_string(string s){
 }
 
 string lcs(string s1, string s2)
-{   
+{
   int m = s1.length(),n = s2.length();
   int DP[m + 1][n + 1];
   int r, c, resLen=0;
@@ -545,7 +546,7 @@ string lcs(string s1, string s2)
       else DP[i][j] = 0;
     }
   }
-  
+
   string res = "";
   if(resLen){
     while (DP[r][c]) {
@@ -564,7 +565,7 @@ void rev_search(){
   cin>>s;
   int max = 0;
   vector<string> res;
-  for(auto it=hisv.rbegin();it!=hisv.rend();it++){  
+  for(auto it=hisv.rbegin();it!=hisv.rend();it++){
     string x = *it;
     string match = lcs(x, s);
     if(x==s){
@@ -636,7 +637,7 @@ int main()
 
     if ((hisv.size() && hisv.back() != line) || hisv.size() == 0) {
       string l1=trim_string(line);
-      if(l1.size()) 
+      if(l1.size())
       {
         hisv.push_back(line);
         if (hisv.size() > HIST_MAX_SIZE) hisv.pop_front();
