@@ -71,7 +71,7 @@ int main()
   {
     for (int j = 0; j < c1; j++)
     {
-      printf("%f ", *(A + r1 * i + j));
+      printf("%f ", *(A + c1 * i + j));
     }
     printf("\n");
   }
@@ -88,7 +88,7 @@ int main()
   {
     for (int j = 0; j < c2; j++)
     {
-      printf("%f ", *(B + r2 * i + j));
+      printf("%f ", *(B + c2 * i + j));
     }
     printf("\n");
   }
