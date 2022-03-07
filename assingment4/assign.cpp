@@ -17,7 +17,7 @@
 #define CHILDREN_SIZE 20
 
 using namespace std;
-vector<string> status({"completed", "on going", "done"});
+vector<string> status({"not started", "on going", "done"});
 
 struct NODE
 {
@@ -98,7 +98,6 @@ void* producer_runner(void* arg)
     // sleep
     sleep(sleep_time);
   }
-
   return NULL;
 }
 void* consumer_runner(void* arg)
