@@ -14,19 +14,24 @@
 // then we need to include the size of base tree
 // shared memory size = (100 * p + 500) * job_size
 #define Y 10
+#define CHILDREN_SIZE 20
 
 using namespace std;
 vector<string> status({"completed", "on going", "done"});
 
-typedef struct
+struct NODE
 {
   int job_id, status, time;
   pthread_mutex_t lock;
-}NODE;
+  struct NODE *children[CHILDREN_SIZE];
+};
+typedef struct NODE NODE;
 
 void create_base_tree(NODE*);
 void* producer_runner(void*);
 void* consumer_runner(void*);
+int no_jobs = 0;
+pthread_mutex_t job_lock;
 int main()
 {
   int P;
@@ -39,6 +44,7 @@ int main()
   pthread_t* pro_id_arr = new pthread_t [P];
   pthread_attr_t attr;
   pthread_attr_init(&attr);
+  pthread_mutex_init(&job_lock, NULL);
   for (int i = 0; i < P; i++)
   {
     pthread_create(&(pro_id_arr[i]), &attr, producer_runner, base);
@@ -67,18 +73,50 @@ int main()
 
 void create_base_tree(NODE* base)
 {
-
+  int job_target = rand() % 200 + 300;
+  no_jobs = job_target;
+  for (int i = 0; i < job_target; i++)
+  {
+    // add job
+  }
 }
 void* producer_runner(void* arg)
 {
   NODE* base = (NODE*)arg;
   int run_time = (rand() % 10) + 10;
   int sleep_time = (rand() % 300) + 200;
+  time_t start_time = time(NULL);
+  while(time(NULL) - start_time < run_time)
+  {
+    // add job
+    pthread_mutex_lock(&job_lock);
+    int idx = rand() % no_jobs;
+    pthread_mutex_unlock(&job_lock);
+    pthread_mutex_lock(&((base + idx) -> lock));
+    // add job to idx job
+    pthread_mutex_unlock(&((base + idx) -> lock));
+    // sleep
+    sleep(sleep_time);
+  }
+
   return NULL;
 }
 void* consumer_runner(void* arg)
 {
   NODE* base = (NODE*)arg;
-
+  bool available = true;
+  while(available)
+  {
+    available = false;
+    // check and sleep and delete
+    // for (int i = 0; i < no_jobs; i++)
+    // {
+    //   if (base[i].children == NULL && base[i].status != 2)
+    //   {
+    //     available = true;
+    //     // sleep
+    //   }
+    // }
+  }
   return NULL;
 }
