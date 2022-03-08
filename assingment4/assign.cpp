@@ -23,7 +23,8 @@ struct NODE
 {
   int job_id, status, time;
   pthread_mutex_t lock;
-  struct NODE *children[CHILDREN_SIZE];
+  struct NODE *child;
+  struct NODe *next;
 };
 typedef struct NODE NODE;
 
