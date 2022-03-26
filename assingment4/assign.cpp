@@ -8,6 +8,7 @@
 #include <math.h>
 #include <errno.h>
 #include <iostream>
+#include <queue>
 
 // shmsize calculation:
 // each process thread sleeps for 200-500ms and runs for 10-20s.
@@ -27,7 +28,7 @@ struct NODE
   int job_id, status, time;
   pthread_mutex_t lock;
   struct NODE *child;
-  struct NODe *next;
+  struct NODE *next;
 };
 typedef struct NODE NODE;
 
@@ -40,6 +41,7 @@ void print_thread(pthread_t);
 void print_tree(NODE* );
 void initialise_job(NODE&);
 void create_job(NODE&);
+void insert_job(NODE*, int);
 
 int no_jobs = 0;
 pthread_mutex_t job_lock;
@@ -67,17 +69,17 @@ int main()
   }
   create_base_tree(base, P);
   print_tree(base);
-  // pthread_t* pro_id_arr = new pthread_t [P];
-  // pthread_attr_t attr;
-  // pthread_attr_init(&attr);
-  // pthread_mutex_init(&job_lock, NULL);
-  // pthread_mutex_init(&job_add, NULL);
-  // for (int i = 0; i < P; i++)
-  // {
-  //   pthread_create(&(pro_id_arr[i]), &attr, producer_runner, base);
-  //   cout << "--> producer "; print_thread(pro_id_arr[i]); cout << " created\n";
-  //   fflush(stdout);
-  // }
+  pthread_t* pro_id_arr = new pthread_t [P];
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_mutex_init(&job_lock, NULL);
+  pthread_mutex_init(&job_add, NULL);
+  for (int i = 0; i < P; i++)
+  {
+    pthread_create(&(pro_id_arr[i]), &attr, producer_runner, base);
+    // cout << "--> producer "; print_thread(pro_id_arr[i]); cout << " created\n";
+    fflush(stdout);
+  }
   // for (int i = 0; i < P; i++)
   // {
   //   pthread_join(pro_id_arr[i], NULL);
@@ -108,88 +110,61 @@ int main()
   shmdt(base);
   shmctl(shmid, IPC_RMID, NULL);
 }
-
 void create_base_tree(NODE* base, int P)
 {
-  // initialising
+  //initialising
   for (int i = 0; i < 100 * P + 500; i++)
   {
     // if (base == NULL) cout << "Hello\n";
     // cout << base << '\n';
     initialise_job(base[i]);
   }
-  // adding jobs
-  // int job_target = rand() % 200 + 300;
-  int job_target = 10;
-  no_jobs = job_target;
-  // Prufer sequence
-  vector<vector<int>> edges(job_target + 1);
-  create_rand_tree(job_target, edges);
-
-  for (int i = 0; i < job_target; i++)
-  {
-    create_job(base[i]);
-  }
-  for (int i = 0; i < job_target; i++)
-  {
-    for (int j = 0; j < (int)edges[i].size(); j++)
+    // adding jobs
+    int job_target = rand() % 200 + 300;
+    // int job_target = 30;
+    create_job(base[0]);
+    for (int i = 1; i < job_target; i++)
     {
-      base[i].children[j] = &(base[edges[i][j] - 1]);
+      insert_job(base, i);
     }
-    for (int j = (int)edges[i].size(); j < CHILDREN_SIZE; j++)
-    {
-      base[i].children[j] = NULL;
-    }
-  }
-}
-void create_rand_tree(int job_target, vector<vector<int>>& edges)
-{
-  vector<int> rand_seq(job_target - 2); // array to store n - 2 numbers
-  vector<int> degree(job_target + 1, 1);
-  for (int i = 0; i < job_target - 2; i++)
-  {
-    rand_seq[i] = (rand() % job_target) + 1;
-    // cout << rand_seq[i] << ' ';
-    degree[rand_seq[i]] += 1;
-  }
-  for (int i = 0; i < job_target - 2; i++)
-  {
-    printf("Parent: %d\n", rand_seq[i]);
-    for (int j = 1; j <= job_target; j++)
-    {
-      if (degree[j] == 1)
-      {
-        edges[rand_seq[i]].push_back(j);
-        edges[j].push_back(rand_seq[i]);
-        printf("-- %d\n", j);
-        degree[j]--;
-        degree[rand_seq[i]]--;
-        break;
-      }
-    }
-  }
-  int u = 0, v = 0;
-  for (int i = 1; i < job_target + 1; i++)
-  {
-    if (degree[i] == 1 && u == 0) u = i;
-    else if (degree[i] == 1 && v == 0) v = i;
-  }
-
-  edges[u].push_back(v);
-  edges[v].push_back(u);
 }
 void initialise_job(NODE& job)
 {
   job.job_id = -1;
   job.status = -1;
   job.time = -1;
-  for (int i = 0; i < CHILDREN_SIZE; i++) job.children[i] = NULL;
+  job.child = NULL;
+  job.next = NULL;
+}
+void insert_job(NODE* base, int i)
+{
+  int target = rand() % i;
+  int option = rand() % 2; // 0 for child 1 for sibling
+  if (target == 0) option = 0;
+  create_job(base[i]);
+  NODE* it = &base[target];
+  if (option == 0)
+  {
+    it = base[target].child;
+    if (it == NULL)
+    {
+      base[target].child = &base[i];
+      return;
+    }
+  }
+  while(it -> next != NULL)
+  {
+    it = it -> next;
+  }
+  it -> next = &base[i];
 }
 void create_job(NODE& job)
 {
   job.job_id = rand() % (int)pow(10, 8);
   job.status = 0;
   job.time = rand() % 251;
+  job.child = NULL;
+  job.next = NULL;
   pthread_mutex_init(&job.lock, NULL);
   print_status(pthread_self(), job.job_id, 0, job.time);
 }
@@ -203,34 +178,27 @@ void* producer_runner(void* arg)
   while(time(NULL) - start_time < run_time)
   {
     // add job
-    pthread_mutex_lock(&job_lock); // get add to queue permission
-    int current_jobs = no_jobs;
-    int idx = rand() % no_jobs;
-    pthread_mutex_unlock(&job_lock);
-
-    pthread_mutex_lock(&job_add); // get add to queue permission
-    initialise_job(base[current_jobs]);
-    create_job(base[current_jobs]);
-    pthread_mutex_init(&base[current_jobs].lock, NULL);
-    pthread_mutex_lock(&(base[idx].lock)); // get permission for idx job
-    base[current_jobs].children[0] = &(base[idx]);
-    print_status(pthread_self(), base[current_jobs].job_id, 0, base[current_jobs].time);
-    pthread_mutex_unlock(&(base[idx].lock));
-    pthread_mutex_unlock(&job_add);
-    int i;
-    pthread_mutex_lock(&(base[idx].lock)); // get permission for idx job
-    // add job to idx job
-    for (i = 0; i < CHILDREN_SIZE; i++)
-    {
-      if (base[idx].children[i] == NULL) break;
-    }
-    base[idx].children[i] = &(base[no_jobs]);
-    pthread_mutex_unlock(&(base[idx].lock));
-    pthread_mutex_lock(&job_lock);
+    pthread_mutex_lock(&job_lock); // get permission for no_jobs
+    int idx = no_jobs;
     no_jobs++;
     pthread_mutex_unlock(&job_lock);
 
-    // sleep
+    pthread_mutex_lock(&job_add);
+    insert_job(base, idx);
+    pthread_mutex_unlock(&job_add);
+
+    // pthread_mutex_lock(&(base[idx].lock));
+    // print_status(pthread_self(), base[idx].job_id, 0, base[idx].time);
+    // pthread_mutex_unlock(&(base[idx].lock));
+    int err = pthread_mutex_trylock(&base[idx].lock);
+    if (err == EBUSY) continue;
+    else if (err < 0)
+    {
+      perror("Error in try lock\n");
+      exit(0);
+    }else print_status(pthread_self(), base[idx].job_id, 0, base[idx].time);
+    pthread_mutex_unlock(&(base[idx].lock));
+
     usleep(sleep_time * 1000);
   }
   return NULL;
@@ -257,32 +225,14 @@ void* consumer_runner(void* arg)
         exit(0);
       }else
       {
-        int no_children = 0;
-        for (int j = 0; j < CHILDREN_SIZE; j++)
-        {
-          if (base[i].children[j] != NULL)
-          {
-            no_children += 1;
-          }
-        }
-        if (no_children == 1 && base[i].status == 0)
+        int no_children;
+        if (base[i].child == NULL) no_children = 0;
+        if (no_children == 0 && base[i].status == 0)
         {
           available = true;
           print_status(pthread_self(), base[i].job_id, 1, base[i].time);
           sleep(base[i].time);
-          // delete
-          for (int j = 0; j < CHILDREN_SIZE; j++)
-          {
-            if (base[i].children[0] -> children[j] == &(base[i]))
-            {
-              base[i].children[0] -> children[j] = NULL;
-              break;
-            }
-          }
-          for (int j = 0; j < CHILDREN_SIZE; j++)
-          {
-            base[i].children[j] = NULL;
-          }
+          base[i].status = 2;
           print_status(pthread_self(), base[i].job_id, 2, base[i].time);
         }
         pthread_mutex_unlock(&base[i].lock);
@@ -310,14 +260,37 @@ void print_status(pthread_t tid, int job_id, int status, int time)
 void print_tree(NODE* tree)
 {
   printf("Number of jobs %d\n", no_jobs);
-  for (int i = 0; i < no_jobs; i++)
+  queue<NODE*> q;
+  q.push(tree);
+  while(q.size() != 0)
   {
-    printf("parent %d: ", tree[i].job_id);
-    for (int j = 0; j < CHILDREN_SIZE; j++)
+    printf("Parent %d \t child:", q.front() -> job_id);
+    NODE* it = q.front() -> child;
+    q.pop();
+    while(it != NULL)
     {
-      if (tree[i].children[j] == NULL) continue;
-      printf("%d, ", tree[i].children[j] -> job_id);
+      printf("%d, ", it -> job_id);
+      q.push(it);
+      it = it -> next;
     }
     printf("\n");
   }
 }
+
+
+// void run(NODE* base)
+// {
+//   if (base == NULL) return;
+//   if (base -> child == NULL || base )
+//   {
+//
+//   }else
+//   {
+//     NODE* it = base;
+//     while (it != NULL)
+//     {
+//       run(it);
+//       it = it -> next;
+//     }
+//   }
+// }
